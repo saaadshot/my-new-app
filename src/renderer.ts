@@ -26,6 +26,21 @@
  * ```
  */
 
-import './index.css';
+import "./index.css";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import NewWindowContent from "./components/NewWindowContent";
 
-console.log('👋 This message is being logged by "renderer.ts", included via Vite');
+const container = document.getElementById("root");
+if (!container) {
+	throw new Error("Root element not found");
+}
+
+const root = createRoot(container);
+
+// Check if this is a new window by looking for the 'type' parameter in the URL
+const urlParams = new URLSearchParams(window.location.search);
+const isNewWindow = urlParams.get("type") === "new";
+
+root.render(React.createElement(isNewWindow ? NewWindowContent : App));
