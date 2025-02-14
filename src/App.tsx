@@ -2,55 +2,40 @@ import React, { useEffect, useState } from "react";
 import NewWindowButton from "./components/NewWindowButton";
 import TestElements from "./components/TestElements";
 
-interface LogEntry {
-	timestamp: string;
-	x: number;
-	y: number;
-	elementInfo: string;
-	screenshot?: string;
+interface WindowInfo {
+	title: string;
+	bounds: {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	};
+	processId: number;
+	path: string;
+	isVisible: boolean;
+	isMinimized: boolean;
 }
 
 const App: React.FC = () => {
-	const [logs, setLogs] = useState<LogEntry[]>([]);
+	const [windows, setWindows] = useState<WindowInfo[]>([]);
 
 	useEffect(() => {
-		const handleLog = async (_: any, data: LogEntry) => {
-			const screenshot = await window.electron.captureScreenshot();
-			setLogs((prev) => [...prev, { ...data, screenshot }]);
+		const handleWindows = (_: any, data: WindowInfo[]) => {
+			setWindows(data);
 		};
 
-		window.electron.ipcRenderer.on("update-log", handleLog);
+		window.electron.ipcRenderer.on("update-windows", handleWindows);
 
 		return () => {
-			window.electron.ipcRenderer.removeListener("update-log", handleLog);
+			window.electron.ipcRenderer.removeListener(
+				"update-windows",
+				handleWindows
+			);
 		};
 	}, []);
 
-	const handleClick = async (e: React.MouseEvent) => {
-		const target = e.target as HTMLElement;
-		const testId = target.getAttribute("data-testid");
-
-		// Special handling for input elements
-		let elementInfo = target.tagName;
-		if (testId) {
-			elementInfo += ` [${testId}]`;
-		}
-		if (target.tagName === "INPUT" || target.tagName === "SELECT") {
-			elementInfo += ` - ${
-				(target as HTMLInputElement).placeholder ||
-				(target as HTMLSelectElement).value ||
-				target.tagName
-			}`;
-		} else if (target.textContent) {
-			elementInfo += ` - ${target.textContent.trim()}`;
-		}
-
-		window.electron.logClick(e.clientX, e.clientY, elementInfo);
-	};
-
 	return (
 		<div
-			onClick={handleClick}
 			style={{
 				display: "flex",
 				flexDirection: "column",
@@ -66,6 +51,7 @@ const App: React.FC = () => {
 			<NewWindowButton buttonText="Create New Window" />
 			<TestElements />
 
+			{/* Windows List */}
 			<div
 				style={{
 					marginTop: "20px",
@@ -75,8 +61,7 @@ const App: React.FC = () => {
 					padding: "20px",
 					borderRadius: "8px",
 					boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-					maxHeight: "600px",
-					overflowY: "auto",
+					marginBottom: "20px",
 				}}
 			>
 				<div
@@ -87,52 +72,69 @@ const App: React.FC = () => {
 						marginBottom: "15px",
 					}}
 				>
-					<h2 style={{ margin: 0 }}>Activity Log</h2>
+					<h2 style={{ margin: 0 }}>Active Windows</h2>
 					<button
-						onClick={() => {
-							setLogs([]);
-						}}
+						onClick={() => setWindows([])}
 						style={{
 							padding: "8px 16px",
-							backgroundColor: "#6c757d",
+							backgroundColor: "#dc3545",
 							color: "white",
 							border: "none",
 							borderRadius: "4px",
 							cursor: "pointer",
+							fontSize: "14px",
+							transition: "background-color 0.3s",
+						}}
+						onMouseOver={(e) => {
+							e.currentTarget.style.backgroundColor = "#c82333";
+						}}
+						onMouseOut={(e) => {
+							e.currentTarget.style.backgroundColor = "#dc3545";
 						}}
 					>
-						Clear Log
+						Clear List
 					</button>
 				</div>
-				{logs.map((log, index) => (
-					<div
-						key={index}
-						style={{
-							marginBottom: "10px",
-							padding: "10px",
-							backgroundColor: "#f8f9fa",
-							borderRadius: "4px",
-						}}
-					>
-						<div>Time: {log.timestamp}</div>
-						<div>
-							Position: ({log.x}, {log.y})
+				<div style={{ maxHeight: "300px", overflowY: "auto" }}>
+					{windows.map((window, index) => (
+						<div
+							key={index}
+							style={{
+								padding: "10px",
+								marginBottom: "10px",
+								backgroundColor: "#f8f9fa",
+								borderRadius: "4px",
+								fontSize: "14px",
+							}}
+						>
+							<div>
+								<strong>Title:</strong> {window.title}
+							</div>
+							<div>
+								<strong>Process ID:</strong> {window.processId}
+							</div>
+							<div>
+								<strong>Path:</strong> {window.path}
+							</div>
+							<div>
+								<strong>Position:</strong> ({window.bounds.x},{" "}
+								{window.bounds.y})
+							</div>
+							<div>
+								<strong>Size:</strong> {window.bounds.width}x
+								{window.bounds.height}
+							</div>
+							<div>
+								<strong>State:</strong>{" "}
+								{window.isMinimized
+									? "Minimized"
+									: window.isVisible
+									? "Visible"
+									: "Hidden"}
+							</div>
 						</div>
-						<div>Element: {log.elementInfo}</div>
-						{log.screenshot && (
-							<img
-								src={log.screenshot}
-								alt="Screenshot"
-								style={{
-									marginTop: "10px",
-									maxWidth: "100%",
-									height: "auto",
-									borderRadius: "4px",
-								}}
-							/>
-						)}
-					</div>
-				))}
+					))}
+				</div>
 			</div>
 		</div>
 	);

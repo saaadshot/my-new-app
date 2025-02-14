@@ -12,8 +12,6 @@ declare global {
 	interface Window {
 		electron: {
 			openNewWindow: () => void;
-			captureScreenshot: () => Promise<string>;
-			logClick: (x: number, y: number, elementInfo: string) => void;
 			ipcRenderer: IpcRenderer;
 		};
 	}
@@ -21,16 +19,16 @@ declare global {
 
 contextBridge.exposeInMainWorld("electron", {
 	openNewWindow: () => ipcRenderer.send("open-new-window"),
-	captureScreenshot: () => ipcRenderer.invoke("get-screenshot"),
-	logClick: (x: number, y: number, elementInfo: string) => {
-		ipcRenderer.send("log-click", { x, y, elementInfo });
-	},
 	ipcRenderer: {
 		on: (channel: string, func: (...args: any[]) => void) => {
-			ipcRenderer.on(channel, func);
+			if (channel === "update-windows") {
+				ipcRenderer.on(channel, func);
+			}
 		},
 		removeListener: (channel: string, func: (...args: any[]) => void) => {
-			ipcRenderer.removeListener(channel, func);
+			if (channel === "update-windows") {
+				ipcRenderer.removeListener(channel, func);
+			}
 		},
 	},
 });

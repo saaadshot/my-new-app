@@ -1,9 +1,33 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 
+// Initialize openWindows function
+let openWindows: any;
+(async () => {
+	const getWindows = await import("get-windows");
+	openWindows = getWindows.openWindows;
+})().catch(console.error);
+
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
+
+interface WindowInfo {
+	title: string;
+	bounds: {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	};
+	owner: {
+		name: string;
+		processId: number;
+		bundleId?: string;
+		path: string;
+	};
+	memoryUsage: number;
+}
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -11,36 +35,6 @@ if (started) {
 }
 
 let mainWindow: BrowserWindow | null = null;
-
-// Register IPC handlers before window creation
-// Handle screen capture request
-ipcMain.handle("get-screenshot", async () => {
-	try {
-		const sources = await desktopCapturer.getSources({
-			types: ["window"],
-			thumbnailSize: { width: 1920, height: 1080 },
-		});
-		const currentWindow = sources.find(
-			(source) =>
-				source.name === "Electron Window Manager" ||
-				source.name.includes("my-new-app")
-		);
-		return currentWindow ? currentWindow.thumbnail.toDataURL() : "";
-	} catch (error) {
-		console.error("Screenshot error:", error);
-		return "";
-	}
-});
-
-// Handle click logging
-ipcMain.on("log-click", (event, data) => {
-	if (mainWindow) {
-		mainWindow.webContents.send("update-log", {
-			timestamp: new Date().toLocaleTimeString(),
-			...data,
-		});
-	}
-});
 
 const createWindow = () => {
 	// Create the browser window.
@@ -93,10 +87,48 @@ ipcMain.on("open-new-window", () => {
 	}
 });
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.on("ready", createWindow);
+// Add window tracking functionality
+let windowTrackingInterval: NodeJS.Timeout | null = null;
+
+const trackWindows = async () => {
+	try {
+		if (!openWindows) {
+			console.log("Waiting for openWindows to initialize...");
+			return;
+		}
+		const windows = (await openWindows()) as WindowInfo[];
+		if (mainWindow) {
+			mainWindow.webContents.send(
+				"update-windows",
+				windows.map((window: WindowInfo) => ({
+					title: window.title,
+					bounds: window.bounds,
+					processId: window.owner.processId,
+					path: window.owner.path,
+					isVisible: true,
+					isMinimized: false,
+				}))
+			);
+		}
+	} catch (error) {
+		console.error("Error tracking windows:", error);
+	}
+};
+
+// Start window tracking when the app is ready
+app.on("ready", () => {
+	createWindow();
+
+	// Start tracking windows every second
+	windowTrackingInterval = setInterval(trackWindows, 1000);
+});
+
+// Clean up interval when app quits
+app.on("before-quit", () => {
+	if (windowTrackingInterval) {
+		clearInterval(windowTrackingInterval);
+	}
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
